@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Euro Calorie Tracker</title>
+
+  <!-- iOS PWA Configurations -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CalorieTrack">
+  <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Apple_Custom_Icon.svg/1024px-Apple_Custom_Icon.svg.png">
+
+  <!-- HTML5 Barcode Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    :root {
+      --bg-color: #f2f2f7;
+      --card-bg: #ffffff;
+      --primary: #007aff;
+      --danger: #ff3b30;
+      --text-main: #000000;
+      --text-muted: #8e8e93;
+      --border-color: #e5e5ea;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      margin: 0;
+      padding: 16px;
+      padding-top: calc(env(safe-area-inset-top) + 16px);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 16px 0;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .metric-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button:active {
+      opacity: 0.8;
+    }
+
+    button.secondary {
+      background-color: var(--border-color);
+      color: var(--text-main);
+      margin-top: 8px;
+    }
+
+    #scanner-container {
+      display: none;
+      position: relative;
+    }
+
+    #reader {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .meal-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .meal-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .meal-item:last-child {
+      border-bottom: none;
+    }
+
+    .meal-info h4 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .meal-info p {
+      margin: 2px 0 0 0;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .meal-kcal {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .delete-btn {
+      color: var(--danger);
+      background: none;
+      border: none;
+      font-size: 12px;
+      width: auto;
+      padding: 4px 8px;
+      margin-left: 8px;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 12px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Calorie Tracker</h1>
+
+  <!-- Today's Summary Card -->
+  <div class="card">
+    <div class="metrics-grid">
+      <div>
+        <div class="metric-value" id="val-kcal">0</div>
+        <div class="metric-label">kcal</div>
+      </div>
+      <div>
+        <div class="metric-value" id="val-protein">0g</div>
+        <div class="metric-label">Protein</div>
+      </div>
+      <div>
+        <div class="metric-value" id="val-carbs">0g</div>
+        <div class="metric-label">Carbs</div>
+      </div>
+      <div>
+        <div class="metric-value" id="val-fat">0g</div>
+        <div class="metric-label">Fat</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barcode Scanner Controls -->
+  <div class="card">
+    <div id="scanner-container">
+      <div id="reader"></div>
+      <button class="secondary" onclick="stopScanner()">Cancel Scanner</button>
+    </div>
+    <button id="scan-trigger-btn" onclick="startScanner()">Scan Barcode</button>
+  </div>
+
+  <!-- Daily Meal Log -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <h3 style="margin: 0; font-size: 17px;">Today's Log</h3>
+      <button onclick="clearTodayLog()" class="delete-btn">Reset Day</button>
+    </div>
+    <ul class="meal-list" id="meal-list">
+      <div class="empty-state" id="empty-msg">No items logged today. Tap "Scan Barcode" to add food.</div>
+    </ul>
+  </div>
+
+  <script>
+    let html5QrcodeScanner = null;
+    let loggedItems = [];
+
+    // Load saved meals on launch
+    document.addEventListener("DOMContentLoaded", () => {
+      const saved = localStorage.getItem("calorie_log_today");
+      if (saved) {
+        loggedItems = JSON.parse(saved);
+        render();
+      }
+    });
+
+    function saveToStorage() {
+      localStorage.setItem("calorie_log_today", JSON.stringify(loggedItems));
+    }
+
+    async function startScanner() {
+      document.getElementById("scanner-container").style.display = "block";
+      document.getElementById("scan-trigger-btn").style.display = "none";
+
+      html5QrcodeScanner = new Html5Qrcode("reader");
+      
+      const config = { 
+        fps: 10, 
+        qrbox: { width: 250, height: 150 },
+        formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A ]
+      };
+
+      try {
+        await html5QrcodeScanner.start(
+          { facingMode: "environment" }, 
+          config, 
+          onScanSuccess
+        );
+      } catch (err) {
+        alert("Camera access denied or unavailable: " + err);
+        stopScanner();
+      }
+    }
+
+    async function stopScanner() {
+      if (html5QrcodeScanner) {
+        try {
+          await html5QrcodeScanner.stop();
+          html5QrcodeScanner.clear();
+        } catch (e) {
+          console.log(e);
+        }
+      }
+      document.getElementById("scanner-container").style.display = "none";
+      document.getElementById("scan-trigger-btn").style.display = "block";
+    }
+
+    async function onScanSuccess(barcode) {
+      await stopScanner();
+
+      // Fetch from Open Food Facts Europe
+      try {
+        const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${barcode}.json`, {
+          headers: { "User-Agent": "PersonalWebCalorieTracker/1.0" }
+        });
+        const data = await response.json();
+
+        if (data.status === 1 && data.product) {
+          const nutriments = data.product.nutriments || {};
+          
+          const newItem = {
+            id: Date.now(),
+            name: data.product.product_name || "Unknown Product",
+            brand: data.product.brands || "Barcode Item",
+            kcal: Math.round(nutriments["energy-kcal_100g"] || 0),
+            protein: Math.round(nutriments["proteins_100g"] || 0),
+            carbs: Math.round(nutriments["carbohydrates_100g"] || 0),
+            fat: Math.round(nutriments["fat_100g"] || 0)
+          };
+
+          loggedItems.unshift(newItem);
+          saveToStorage();
+          render();
+        } else {
+          alert(`Barcode ${barcode} not found in Open Food Facts database.`);
+        }
+      } catch (error) {
+        alert("Failed to connect to food database. Check internet connection.");
+      }
+    }
+
+    function deleteItem(id) {
+      loggedItems = loggedItems.filter(item => item.id !== id);
+      saveToStorage();
+      render();
+    }
+
+    function clearTodayLog() {
+      if (confirm("Clear all items for today?")) {
+        loggedItems = [];
+        saveToStorage();
+        render();
+      }
+    }
+
+    function render() {
+      const listEl = document.getElementById("meal-list");
+      const emptyMsg = document.getElementById("empty-msg");
+
+      // Calculate totals
+      let totals = loggedItems.reduce((acc, item) => {
+        acc.kcal += item.kcal;
+        acc.protein += item.protein;
+        acc.carbs += item.carbs;
+        acc.fat += item.fat;
+        return acc;
+      }, { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+
+      // Update UI Header Values
+      document.getElementById("val-kcal").innerText = totals.kcal;
+      document.getElementById("val-protein").innerText = totals.protein + "g";
+      document.getElementById("val-carbs").innerText = totals.carbs + "g";
+      document.getElementById("val-fat").innerText = totals.fat + "g";
+
+      // Render Item List
+      listEl.innerHTML = "";
+      if (loggedItems.length === 0) {
+        listEl.appendChild(emptyMsg);
+        emptyMsg.style.display = "block";
+      } else {
+        loggedItems.forEach(item => {
+          const li = document.createElement("li");
+          li.className = "meal-item";
+          li.innerHTML = `
+            <div class="meal-info">
+              <h4>${item.name}</h4>
+              <p>${item.brand} • P: ${item.protein}g | C: ${item.carbs}g | F: ${item.fat}g (per 100g)</p>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span class="meal-kcal">${item.kcal} kcal</span>
+              <button class="delete-btn" onclick="deleteItem(${item.id})">✕</button>
+            </div>
+          `;
+          listEl.appendChild(li);
+        });
+      }
+    }
+  </script>
+</body>
+</html>
